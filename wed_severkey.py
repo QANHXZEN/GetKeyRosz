@@ -1,9 +1,9 @@
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, session, redirect, url_back
 from functools import wraps
 import sqlite3
 from datetime import datetime, timedelta
 import secrets
-import hashlib
+import os
 
 app = Flask(__name__)
 app.secret_key = "supersecretkey_6778346_bankey"
@@ -16,7 +16,7 @@ PRICES = {
     "1day": 5000,      # 5K - 1 ngày
     "1week": 20000,    # 20K - 1 tuần
     "1month": 50000,   # 50K - 1 tháng
-    "forever": 200000  # 200K - Vĩnh viễn (100 năm)
+    "forever": 200000  # 200K - Vĩnh viễn
 }
 
 DAYS_MAP = {
@@ -35,9 +35,10 @@ PLAN_NAMES = {
 
 # ==================== DATABASE ====================
 def init_db():
+    """Khởi tạo database"""
     conn = sqlite3.connect('bot_data.db')
     
-    # Bảng keys
+    # Bảng premium_keys
     conn.execute('''
         CREATE TABLE IF NOT EXISTS premium_keys (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -58,7 +59,7 @@ def init_db():
             payment_method TEXT,
             payment_status TEXT DEFAULT 'pending'
         )
-    ')
+    ''')
     
     # Bảng orders
     conn.execute('''
@@ -80,6 +81,7 @@ def init_db():
     conn.close()
     print("✅ Database initialized")
 
+# Khởi tạo database khi chạy
 init_db()
 
 # ==================== HÀM HỖ TRỢ ====================
@@ -159,7 +161,7 @@ def get_key_info(key_text):
 @app.route('/')
 def index():
     """Trang chủ - Bán key"""
-    return render_template('index.html', prices=PRICES, plan_names=PLAN_NAMES)
+    return render_template_string(INDEX_HTML, prices=PRICES, plan_names=PLAN_NAMES)
 
 @app.route('/buy/<plan>')
 def buy_page(plan):
@@ -167,7 +169,7 @@ def buy_page(plan):
     if plan not in PRICES:
         return redirect(url_for('index'))
     
-    return render_template('buy.html', 
+    return render_template_string(BUY_HTML, 
                          plan=plan, 
                          plan_name=PLAN_NAMES[plan],
                          price=PRICES[plan],
@@ -229,7 +231,7 @@ def confirm_payment_api():
 @app.route('/check-key')
 def check_key_page():
     """Trang kiểm tra key"""
-    return render_template('check_key.html')
+    return render_template_string(CHECK_KEY_HTML)
 
 @app.route('/api/check-key', methods=['POST'])
 def check_key_api():
@@ -258,7 +260,7 @@ def check_key_api():
 @app.route('/admin')
 def admin_page():
     """Trang admin - Yêu cầu admin key"""
-    return render_template('admin.html')
+    return render_template_string(ADMIN_HTML)
 
 @app.route('/api/admin/login', methods=['POST'])
 def admin_login():
@@ -330,10 +332,301 @@ def admin_logout():
     session.pop('admin_logged_in', None)
     return redirect(url_for('admin_page'))
 
-if __name__ == '__main__':
-    print("=" * 50)
-    print("🌐 WEB BÁN KEY PREMIUM")
-    print("🔗 http://localhost:5000")
-    print("🔐 Admin Key: 6778346")
-    print("=" * 50)
-    app.run(debug=True, host='0.0.0.0', port=5000)
+# ==================== HTML TEMPLATES (Nhúng trực tiếp để tránh lỗi file) ====================
+
+INDEX_HTML = '''
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bot Premium - Mua Key VIP</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 50px;
+        }
+        .header h1 {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 30px;
+            margin-bottom: 50px;
+        }
+        .pricing-card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+            transition: transform 0.3s;
+            cursor: pointer;
+            position: relative;
+        }
+        .pricing-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+        .pricing-card.popular {
+            border: 2px solid #f39c12;
+            transform: scale(1.02);
+        }
+        .popular-badge {
+            position: absolute;
+            top: 20px;
+            right: -30px;
+            background: #f39c12;
+            color: white;
+            padding: 5px 30px;
+            transform: rotate(45deg);
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .plan-name {
+            font-size: 28px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        .price {
+            font-size: 48px;
+            font-weight: bold;
+            color: #333;
+            margin: 20px 0;
+        }
+        .price small {
+            font-size: 16px;
+            color: #999;
+        }
+        .duration {
+            color: #666;
+            margin-bottom: 20px;
+        }
+        .features {
+            list-style: none;
+            margin: 20px 0;
+        }
+        .features li {
+            padding: 8px 0;
+            color: #555;
+            border-bottom: 1px solid #eee;
+        }
+        .features li:before {
+            content: "✓";
+            color: #27ae60;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        .buy-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+        }
+        .footer {
+            text-align: center;
+            color: white;
+            margin-top: 50px;
+        }
+        .footer a {
+            color: white;
+            margin: 0 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 Bot Premium VIP</h1>
+            <p>Nâng cấp tài khoản để trải nghiệm đầy đủ tính năng</p>
+        </div>
+        <div class="pricing-grid">
+            <div class="pricing-card">
+                <div class="plan-name">⚡ VIP 1 Ngày</div>
+                <div class="price">5,000đ <small>/ 1 ngày</small></div>
+                <div class="duration">⏰ Thời gian: 24 giờ</div>
+                <ul class="features">
+                    <li>Chạy code 50+ ngôn ngữ</li>
+                    <li>Tạo QR code không giới hạn</li>
+                    <li>Quản lý công việc</li>
+                    <li>Hỗ trợ 24/7</li>
+                </ul>
+                <button class="buy-btn" onclick="buyNow('1day')">Mua Ngay</button>
+            </div>
+            <div class="pricing-card popular">
+                <div class="popular-badge">PHỔ BIẾN</div>
+                <div class="plan-name">🔥 VIP 1 Tuần</div>
+                <div class="price">20,000đ <small>/ 7 ngày</small></div>
+                <div class="duration">⏰ Tiết kiệm 43%</div>
+                <ul class="features">
+                    <li>Chạy code 50+ ngôn ngữ</li>
+                    <li>Tạo QR code không giới hạn</li>
+                    <li>Hỗ trợ ưu tiên</li>
+                    <li>+ 2 ngày tặng thêm</li>
+                </ul>
+                <button class="buy-btn" onclick="buyNow('1week')">Mua Ngay</button>
+            </div>
+            <div class="pricing-card">
+                <div class="plan-name">💎 VIP 1 Tháng</div>
+                <div class="price">50,000đ <small>/ 30 ngày</small></div>
+                <div class="duration">⏰ Tiết kiệm 67%</div>
+                <ul class="features">
+                    <li>Chạy code 50+ ngôn ngữ</li>
+                    <li>Tạo QR code không giới hạn</li>
+                    <li>Hỗ trợ VIP 24/7</li>
+                    <li>+ 5 ngày tặng thêm</li>
+                </ul>
+                <button class="buy-btn" onclick="buyNow('1month')">Mua Ngay</button>
+            </div>
+            <div class="pricing-card">
+                <div class="plan-name">👑 VIP Vĩnh Viễn</div>
+                <div class="price">200,000đ <small>/ mãi mãi</small></div>
+                <div class="duration">⭐ Giá trị trọn đời</div>
+                <ul class="features">
+                    <li>Chạy code 50+ ngôn ngữ</li>
+                    <li>Tất cả tính năng tương lai</li>
+                    <li>Hỗ trợ ưu tiên cao nhất</li>
+                    <li>Quà tặng đặc biệt</li>
+                </ul>
+                <button class="buy-btn" onclick="buyNow('forever')">Mua Ngay</button>
+            </div>
+        </div>
+        <div class="footer">
+            <p>📩 Sau khi thanh toán, key sẽ được gửi tự động</p>
+            <p>🔍 <a href="/check-key">Kiểm tra key</a> | 👑 <a href="/admin">Admin Login</a></p>
+        </div>
+    </div>
+    <script>
+        function buyNow(plan) {
+            window.location.href = `/buy/${plan}`;
+        }
+    </script>
+</body>
+</html>
+'''
+
+BUY_HTML = '''
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Thanh toán - Bot Premium</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .back-btn {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: white;
+            text-decoration: none;
+        }
+        h1 { color: #667eea; margin-bottom: 20px; }
+        .order-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        input:focus { outline: none; border-color: #667eea; }
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 14px 30px;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+        }
+        .bank-info {
+            background: #e8f5e9;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            display: none;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            display: none;
+        }
+        .result.success {
+            background: #d4edda;
+            color: #155724;
+            display: block;
+        }
+        .result.error {
+            background: #f8d7da;
+            color: #721c24;
+            display: block;
+        }
+        .key-display {
+            font-family: monospace;
+            font-size: 18px;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-btn">← Quay lại</a>
+        <div class="card">
+            <h1>💰 Thanh toán</h1>
+            <div class="order-info">
+                <h3>📦 Gói: <span id="planName">{{ plan_name }}</span></h3>
+                <p>💰 Giá: <strong>{{ price }}đ</strong></p>
+                <p>⏰ Thời gian: <span id="duration">{{ days }} ngày</span></p>
+            </div>
+            <form id="orderForm">
+                <div class="form-group">
+                    <label>👤 Họ và tên</label>
+                    <input type="text" id="name" pl
